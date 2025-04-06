@@ -474,6 +474,7 @@ func (ipam *LBIPAM) serviceViewFromService(key resource.Key, svc *slim_core_v1.S
 	sv.RequestedIPs = getSVCRequestedIPs(ipam.logger, svc)
 	sv.SharingKey = getSVCSharingKey(svc)
 	sv.SharingCrossNamespace = getSVCSharingCrossNamespace(svc)
+	sv.SharingPermitDifferentPods = getSVCSharingPermitDifferentPods(svc)
 	sv.ExternalTrafficPolicy = svc.Spec.ExternalTrafficPolicy
 	sv.Ports = make([]slim_core_v1.ServicePort, len(svc.Spec.Ports))
 	copy(sv.Ports, svc.Spec.Ports)
@@ -732,6 +733,13 @@ func getSVCSharingCrossNamespace(svc *slim_core_v1.Service) []string {
 		return strings.Split(val, ",")
 	}
 	return []string{}
+}
+
+func getSVCSharingPermitDifferentPods(svc *slim_core_v1.Service) bool {
+	if val, _ := annotation.Get(svc, annotation.LBIPAMSharingPermitDifferentPods, annotation.LBIPAMSharingPermitDifferentPodsAlias); val == "true" {
+		return true
+	}
+	return false
 }
 
 func (ipam *LBIPAM) handleDeletedService(svc *slim_core_v1.Service) {

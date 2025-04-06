@@ -1632,6 +1632,203 @@ func TestSharedServicesUpdateSharingKeyAndRequestedIP(t *testing.T) {
 	}
 }
 
+// This test makes sure that two services with the same sharing key, local external traffic policy
+// and pod selector get assigned the same IP.
+func TestSharedServiceWithMatchingServicePodSelector(t *testing.T) {
+	poolA := mkPool(poolAUID, "pool-a", []string{"10.0.10.0/24"})
+	fixture := mkTestFixture(t, true, false)
+	fixture.UpsertPool(t, poolA)
+
+	svcA := &slim_core_v1.Service{
+		ObjectMeta: slim_meta_v1.ObjectMeta{
+			Name:      "service-a",
+			Namespace: "default",
+			UID:       serviceAUID,
+			Annotations: map[string]string{
+				annotation.LBIPAMSharingKeyAlias: "key-1",
+			},
+		},
+		Spec: slim_core_v1.ServiceSpec{
+			Type:                  slim_core_v1.ServiceTypeLoadBalancer,
+			ExternalTrafficPolicy: slim_core_v1.ServiceExternalTrafficPolicyLocal,
+			Selector: map[string]string{
+				"component": "service",
+			},
+			IPFamilies: []slim_core_v1.IPFamily{
+				slim_core_v1.IPv4Protocol,
+			},
+			Ports: []slim_core_v1.ServicePort{{
+				Port: 80,
+			}},
+		},
+	}
+	fixture.UpsertSvc(t, svcA)
+
+	svcB := &slim_core_v1.Service{
+		ObjectMeta: slim_meta_v1.ObjectMeta{
+			Name:      "service-b",
+			Namespace: "default",
+			UID:       serviceAUID,
+			Annotations: map[string]string{
+				annotation.LBIPAMSharingKeyAlias: "key-1",
+			},
+		},
+		Spec: slim_core_v1.ServiceSpec{
+			Type:                  slim_core_v1.ServiceTypeLoadBalancer,
+			ExternalTrafficPolicy: slim_core_v1.ServiceExternalTrafficPolicyLocal,
+			Selector: map[string]string{
+				"component": "service",
+			},
+			IPFamilies: []slim_core_v1.IPFamily{
+				slim_core_v1.IPv4Protocol,
+			},
+			Ports: []slim_core_v1.ServicePort{{
+				Port: 81,
+			}},
+		},
+	}
+	fixture.UpsertSvc(t, svcB)
+
+	svcA = fixture.GetSvc("default", "service-a")
+	svcB = fixture.GetSvc("default", "service-b")
+
+	if svcA.Status.LoadBalancer.Ingress[0].IP != svcB.Status.LoadBalancer.Ingress[0].IP {
+		t.Fatal("IPs should be the same")
+	}
+}
+
+// This test makes sure that two services with the same sharing key and local external traffic policy
+// but different pod selector and without permit annotation, get assigned different IPs.
+func TestSharedServiceWithDifferentServicePodSelectorWithoutPermitAnnotation(t *testing.T) {
+	poolA := mkPool(poolAUID, "pool-a", []string{"10.0.10.0/24"})
+	fixture := mkTestFixture(t, true, false)
+	fixture.UpsertPool(t, poolA)
+
+	svcA := &slim_core_v1.Service{
+		ObjectMeta: slim_meta_v1.ObjectMeta{
+			Name:      "service-a",
+			Namespace: "default",
+			UID:       serviceAUID,
+			Annotations: map[string]string{
+				annotation.LBIPAMSharingKeyAlias: "key-1",
+			},
+		},
+		Spec: slim_core_v1.ServiceSpec{
+			Type:                  slim_core_v1.ServiceTypeLoadBalancer,
+			ExternalTrafficPolicy: slim_core_v1.ServiceExternalTrafficPolicyLocal,
+			Selector: map[string]string{
+				"component": "service-a",
+			},
+			IPFamilies: []slim_core_v1.IPFamily{
+				slim_core_v1.IPv4Protocol,
+			},
+			Ports: []slim_core_v1.ServicePort{{
+				Port: 80,
+			}},
+		},
+	}
+	fixture.UpsertSvc(t, svcA)
+
+	svcB := &slim_core_v1.Service{
+		ObjectMeta: slim_meta_v1.ObjectMeta{
+			Name:      "service-b",
+			Namespace: "default",
+			UID:       serviceAUID,
+			Annotations: map[string]string{
+				annotation.LBIPAMSharingKeyAlias: "key-1",
+			},
+		},
+		Spec: slim_core_v1.ServiceSpec{
+			Type:                  slim_core_v1.ServiceTypeLoadBalancer,
+			ExternalTrafficPolicy: slim_core_v1.ServiceExternalTrafficPolicyLocal,
+			Selector: map[string]string{
+				"component": "service-b",
+			},
+			IPFamilies: []slim_core_v1.IPFamily{
+				slim_core_v1.IPv4Protocol,
+			},
+			Ports: []slim_core_v1.ServicePort{{
+				Port: 81,
+			}},
+		},
+	}
+	fixture.UpsertSvc(t, svcB)
+
+	svcA = fixture.GetSvc("default", "service-a")
+	svcB = fixture.GetSvc("default", "service-b")
+
+	if svcA.Status.LoadBalancer.Ingress[0].IP == svcB.Status.LoadBalancer.Ingress[0].IP {
+		t.Fatal("IPs should be different")
+	}
+}
+
+// This test makes sure that two services with the same sharing key, local external traffic policy and permit annotation
+// but different pod selector get assigned the same IP.
+func TestSharedServiceWithDifferentServicePodSelectorWithPermitAnnotation(t *testing.T) {
+	poolA := mkPool(poolAUID, "pool-a", []string{"10.0.10.0/24"})
+	fixture := mkTestFixture(t, true, false)
+	fixture.UpsertPool(t, poolA)
+
+	svcA := &slim_core_v1.Service{
+		ObjectMeta: slim_meta_v1.ObjectMeta{
+			Name:      "service-a",
+			Namespace: "default",
+			UID:       serviceAUID,
+			Annotations: map[string]string{
+				annotation.LBIPAMSharingKeyAlias:            "key-1",
+				annotation.LBIPAMSharingPermitDifferentPods: "true",
+			},
+		},
+		Spec: slim_core_v1.ServiceSpec{
+			Type:                  slim_core_v1.ServiceTypeLoadBalancer,
+			ExternalTrafficPolicy: slim_core_v1.ServiceExternalTrafficPolicyLocal,
+			Selector: map[string]string{
+				"component": "service-a",
+			},
+			IPFamilies: []slim_core_v1.IPFamily{
+				slim_core_v1.IPv4Protocol,
+			},
+			Ports: []slim_core_v1.ServicePort{{
+				Port: 80,
+			}},
+		},
+	}
+	fixture.UpsertSvc(t, svcA)
+
+	svcB := &slim_core_v1.Service{
+		ObjectMeta: slim_meta_v1.ObjectMeta{
+			Name:      "service-b",
+			Namespace: "default",
+			UID:       serviceAUID,
+			Annotations: map[string]string{
+				annotation.LBIPAMSharingKeyAlias:            "key-1",
+				annotation.LBIPAMSharingPermitDifferentPods: "true",
+			},
+		},
+		Spec: slim_core_v1.ServiceSpec{
+			Type:                  slim_core_v1.ServiceTypeLoadBalancer,
+			ExternalTrafficPolicy: slim_core_v1.ServiceExternalTrafficPolicyLocal,
+			Selector: map[string]string{
+				"component": "service-b",
+			},
+			IPFamilies: []slim_core_v1.IPFamily{
+				slim_core_v1.IPv4Protocol,
+			},
+			Ports: []slim_core_v1.ServicePort{{
+				Port: 81,
+			}},
+		},
+	}
+	fixture.UpsertSvc(t, svcB)
+
+	svcA = fixture.GetSvc("default", "service-a")
+	svcB = fixture.GetSvc("default", "service-b")
+
+	if svcA.Status.LoadBalancer.Ingress[0].IP != svcB.Status.LoadBalancer.Ingress[0].IP {
+		t.Fatal("IPs should be the same")
+	}
+}
+
 // TestAddPool tests that adding a new pool will satisfy services.
 func TestAddPool(t *testing.T) {
 	poolA := mkPool(poolAUID, "pool-a", []string{"10.0.10.0/24"})

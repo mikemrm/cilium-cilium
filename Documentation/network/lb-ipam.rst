@@ -498,7 +498,13 @@ Services that have the same sharing key annotation will share the same IP or set
   service-blue   LoadBalancer   10.96.26.105   20.0.10.100               1234:30363/TCP   43s
   service-red    LoadBalancer   10.96.26.106   20.0.10.100               2345:30131/TCP   43s
 
-As long as the services do not have conflicting ports, they will be allocated the same IP. If the services have conflicting ports, they will be allocated different IPs, which will be added to the set of IPs belonging to the sharing key.
+As long as the services do not have conflicting ports or externalTrafficPolicy, they will be allocated the same IP. If the services have conflicting ports, they will be allocated different IPs, which will be added to the set of IPs belonging to the sharing key.
 If a service has a sharing key and also requests a specific IP, the service will be allocated the requested IP and it will be added to the set of IPs belonging to that sharing key.
 
 By default, sharing IPs across namespaces is not allowed. To allow sharing across a namespace, set the ``lbipam.cilium.io/sharing-cross-namespace`` annotation to the namespaces the service can be shared with. The value must be a comma-separated list of namespaces. The annotation must be present on both services. You can allow all namespaces with ``*``.
+
+Additionally, sharing IPs across services selecting different pods is not allowed. To allow sharing with different pod selectors, set the annotation ``lbipam.cilium.io/sharing-permit-different-pods: 'true'``. The annotation must be present on all services referencing the sharing key.
+
+.. note::
+
+  When services are configured with the annotation ``lbipam.cilium.io/sharing-permit-different-pods`` ensure pods for each service are scheduled on the same set of nodes, otherwise traffic landing on a node which does not have a pod scheduled on it will be dropped.

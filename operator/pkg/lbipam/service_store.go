@@ -65,8 +65,9 @@ type ServiceView struct {
 	Generation int64
 	Status     *slim_core_v1.ServiceStatus
 
-	SharingKey            string
-	SharingCrossNamespace []string
+	SharingKey                 string
+	SharingCrossNamespace      []string
+	SharingPermitDifferentPods bool
 	// These required to determine if a service conflicts with another for sharing an ip
 	ExternalTrafficPolicy slim_core_v1.ServiceExternalTrafficPolicy
 	Ports                 []slim_core_v1.ServicePort
@@ -124,19 +125,21 @@ func (sv *ServiceView) isCompatible(osv *ServiceView, lbProtoDiff bool) (bool, s
 		return false, "different ExternalTrafficPolicy"
 	}
 
-	// If both services have a 'local' external traffic policy, then they must select the same set of pods.
-	// If this were not the case, then we could end up in a situation directing traffic to a node which doesn't
-	// have the pod running on it for one of the services.
-	if sv.ExternalTrafficPolicy == slim_core_v1.ServiceExternalTrafficPolicyLocal {
-		// If any of the two service doesn't select any pods with the selector, it likely uses an endpoints object to
-		// link the service to pods. LB-IPAM isn't smart enough to handle this case (yet), so we don't allow it.
-		if len(sv.Selector) == 0 || len(osv.Selector) == 0 {
-			return false, "compatible ExternalTrafficPolicy local but selecting different set of pods"
-		}
+	if !sv.SharingPermitDifferentPods || !osv.SharingPermitDifferentPods {
+		// If both services have a 'local' external traffic policy, then they must select the same set of pods.
+		// If this were not the case, then we could end up in a situation directing traffic to a node which doesn't
+		// have the pod running on it for one of the services.
+		if sv.ExternalTrafficPolicy == slim_core_v1.ServiceExternalTrafficPolicyLocal {
+			// If any of the two service doesn't select any pods with the selector, it likely uses an endpoints object to
+			// link the service to pods. LB-IPAM isn't smart enough to handle this case (yet), so we don't allow it.
+			if len(sv.Selector) == 0 || len(osv.Selector) == 0 {
+				return false, "compatible ExternalTrafficPolicy local but selecting different set of pods"
+			}
 
-		// If both use selectors, and they are not the same, then the services are not compatible.
-		if !maps.Equal(sv.Selector, osv.Selector) {
-			return false, "compatible ExternalTrafficPolicy local but selecting different set of pods"
+			// If both use selectors, and they are not the same, then the services are not compatible.
+			if !maps.Equal(sv.Selector, osv.Selector) {
+				return false, "compatible ExternalTrafficPolicy local but selecting different set of pods"
+			}
 		}
 	}
 
